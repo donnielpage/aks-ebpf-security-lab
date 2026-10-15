@@ -1,0 +1,56 @@
+# Sanitized Example Configuration for Azure Cloud Account Onboarding
+# Copy to main.tf (ignored by git) and populate via 1Password or environment variables
+
+terraform {
+  required_providers {
+    sysdig = {
+      source  = "sysdiglabs/sysdig"
+      version = "~>3.11"
+    }
+
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3"
+    }
+  }
+}
+
+provider "sysdig" {
+  sysdig_secure_url       = "https://app.us4.sysdig.com"
+  sysdig_secure_api_token = "<YOUR_SYSDIG_SECURE_API_TOKEN>"
+}
+
+provider "azurerm" {
+  features {}
+  subscription_id = "<YOUR_AZURE_SUBSCRIPTION_ID>"
+  tenant_id       = "<YOUR_AZURE_TENANT_ID>"
+}
+
+provider "azuread" {
+  tenant_id = "<YOUR_AZURE_TENANT_ID>"
+}
+
+module "onboarding" {
+  source          = "sysdiglabs/secure/azurerm//modules/onboarding"
+  version         = "~>4.0"
+  subscription_id = "<YOUR_AZURE_SUBSCRIPTION_ID>"
+  tenant_id       = "<YOUR_AZURE_TENANT_ID>"
+}
+
+module "config-posture" {
+  source                   = "sysdiglabs/secure/azurerm//modules/config-posture"
+  version                  = "~>4.0"
+  subscription_id          = module.onboarding.subscription_id
+  sysdig_secure_account_id = module.onboarding.sysdig_secure_account_id
+}
+
+resource "sysdig_secure_cloud_auth_account_feature" "config_posture" {
+  account_id = module.onboarding.sysdig_secure_account_id
+  type       = "FEATURE_SECURE_CONFIG_POSTURE"
+  enabled    = true
+  components = [module.config-posture.service_principal_component_id]
+  depends_on = [module.config-posture]
+  lifecycle {
+    ignore_changes = [flags]
+  }
+}

@@ -1,0 +1,26 @@
+# Sysdig Shield Helm Values Configuration
+# Official Chart: sysdig/sysdig-deploy
+# Documentation: https://docs.sysdig.com/en/docs/installation/sysdig-secure/
+
+global:
+  sysdig:
+    # Set your Sysdig Access Key via command line (--set global.sysdig.accessKey=...) or 1Password
+    accessKey: ""
+    # Sysdig SaaS region endpoint (us4, us2, us1, eu1, au1)
+    region: "us4"
+  clusterName: "aks-sysdig-demo"
+
+# Modern eBPF runtime threat detection sensor and In-Use vulnerability scanner
+nodeAnalyzer:
+  enabled: true
+  nodeAnalyzer:
+    runtimeScanner:
+      deploy: true
+
+# Kubernetes Security Posture Management (KSPM) inventory collector
+kspmCollector:
+  enabled: true
+
+# Admission controller is optional and disabled for evaluation footprint
+admissionController:
+  enabled: false

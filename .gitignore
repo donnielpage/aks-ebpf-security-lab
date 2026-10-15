@@ -1,0 +1,22 @@
+# Environment and credential files
+*.env
+.env*
+*.key
+*.pem
+*.token
+
+# Kubernetes local credentials
+kubeconfig*
+*.kubeconfig
+
+# macOS & OS artifacts
+.DS_Store
+Thumbs.db
+
+# Terraform state & provider binaries (prevent leaking tokens in state/manifests)
+**/.terraform/*
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+sysdig/azure-onboarding/main.tf
