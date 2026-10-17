@@ -134,7 +134,46 @@ case "${1:-status}" in
             echo ""
             echo "Workload Status in voting-app namespace:"
             kubectl get pods -n voting-app 2>/dev/null || echo "No voting-app namespace found."
+            echo ""
+            echo "Sysdig Shield Agent Status in sysdig-agent namespace:"
+            kubectl get pods -n sysdig-agent 2>/dev/null || echo "No sysdig-agent namespace found."
         fi
+        ;;
+
+    deploy-agent)
+        ensure_auth
+        if [[ -z "${SYSDIG_ACCESS_KEY:-}" ]]; then
+            if [[ -n "${OP_ENV_ID:-}" ]]; then
+                echo "Injecting SYSDIG_ACCESS_KEY from 1Password Environment (${OP_ENV_ID})..."
+                exec op run --environment "${OP_ENV_ID}" -- "$0" "$@"
+            else
+                echo "Error: SYSDIG_ACCESS_KEY is not set in the current environment."
+                echo "Ensure SYSDIG_ACCESS_KEY is added to your 1Password Environment and run:"
+                echo "  op run --environment <ENVIRONMENT_ID> -- $0 deploy-agent"
+                exit 1
+            fi
+        fi
+
+        SYSDIG_REGION="${SYSDIG_REGION:-us4}"
+        echo "Adding and updating official Sysdig Helm chart repository..."
+        helm repo add sysdig https://charts.sysdig.com --force-update
+        helm repo update
+
+        echo "Deploying Sysdig Shield to cluster ${CLUSTER_NAME} (Region: ${SYSDIG_REGION})..."
+        helm upgrade --install sysdig-shield sysdig/sysdig-deploy \
+            --namespace sysdig-agent \
+            --create-namespace \
+            --set global.sysdig.accessKey="${SYSDIG_ACCESS_KEY}" \
+            --set global.sysdig.region="${SYSDIG_REGION}" \
+            --set global.clusterName="${CLUSTER_NAME}" \
+            --set nodeAnalyzer.enabled=true \
+            --set nodeAnalyzer.nodeAnalyzer.runtimeScanner.deploy=true \
+            --set kspmCollector.enabled=true \
+            --set admissionController.enabled=false
+
+        echo "Waiting for Sysdig Shield pods to initialize..."
+        sleep 5
+        kubectl get pods -n sysdig-agent -o wide
         ;;
 
     connect)
@@ -179,7 +218,7 @@ print("{:<28} ${:>17.2f} {:>10}\n".format("TOTAL MONTH-TO-DATE SPEND", total, "U
         ;;
 
     *)
-        echo "Usage: $0 {create|start|stop|status|cost|connect|delete}"
+        echo "Usage: $0 {create|start|stop|status|deploy-agent|cost|connect|delete}"
         exit 1
         ;;
 esac
