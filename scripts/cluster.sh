@@ -165,9 +165,11 @@ case "${1:-status}" in
             --create-namespace \
             --set global.sysdig.accessKey="${SYSDIG_ACCESS_KEY}" \
             --set global.sysdig.region="${SYSDIG_REGION}" \
-            --set global.clusterName="${CLUSTER_NAME}" \
+            --set global.clusterConfig.name="${CLUSTER_NAME}" \
+            --set global.kspm.deploy=true \
             --set nodeAnalyzer.enabled=true \
             --set nodeAnalyzer.nodeAnalyzer.runtimeScanner.deploy=true \
+            --set nodeAnalyzer.nodeAnalyzer.benchmarkRunner.deploy=false \
             --set kspmCollector.enabled=true \
             --set admissionController.enabled=false
 
@@ -189,10 +191,21 @@ case "${1:-status}" in
     cost)
         ensure_auth
         echo "Querying Month-to-Date Azure Cost Management breakdown for subscription ${SUBSCRIPTION_ID}..."
-        az rest --method post \
+        CACHE_FILE="/tmp/.aks_cost_cache.json"
+        if COST_JSON=$(az rest --method post \
             --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/providers/Microsoft.CostManagement/query?api-version=2023-11-01" \
             --body '{"type":"ActualCost","timeframe":"MonthToDate","dataset":{"granularity":"None","aggregation":{"totalCost":{"name":"Cost","function":"Sum"}},"grouping":[{"type":"Dimension","name":"ServiceName"}]}}' \
-            --output json | python3 -c '
+            --output json 2>/dev/null) && [[ -n "${COST_JSON}" ]]; then
+            printf '%s' "${COST_JSON}" > "${CACHE_FILE}"
+        elif [[ -f "${CACHE_FILE}" ]]; then
+            echo "Note: Azure Cost Management API rate limit (HTTP 429) reached; displaying most recent cached snapshot:"
+            COST_JSON=$(cat "${CACHE_FILE}")
+        else
+            echo "Warning: Azure Cost Management API returned HTTP 429 (Too Many Requests). Please wait 60 seconds and retry."
+            exit 0
+        fi
+
+        printf '%s' "${COST_JSON}" | python3 -c '
 import sys, json
 data = json.load(sys.stdin)
 rows = data.get("properties", {}).get("rows", [])
